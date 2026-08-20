@@ -10,15 +10,15 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from aegis_ppe.safety_interpreter import SafetyInterpreter
 
 def main():
-    print("--- AEGIS Phase 8: Performance Measurement ---")
+    print("--- AEGIS Phase 9: ONNX Runtime Inference ---")
     
     # Setup psutil process for RAM usage
     process = psutil.Process(os.getpid())
     # Prime the CPU percentage calculation
     psutil.cpu_percent()
     
-    # Path to your successfully trained baseline model
-    model_path = r'D:\AntiGravity Projects\mnemosyne\runs\detect\runs\train\aegis_baseline_fast\weights\best.pt'
+    # Path to your successfully exported ONNX model
+    model_path = r'D:\AntiGravity Projects\mnemosyne\runs\detect\runs\train\aegis_baseline_fast\weights\best.onnx'
     
     try:
         print(f"Loading AEGIS Baseline Model from: {model_path}")
@@ -69,7 +69,7 @@ def main():
         # Lowered conf to 0.2 to see if the model is detecting you but with lower confidence
         # due to differences between your webcam background/lighting and the dataset
         inf_start_time = time.time()
-        results = model.predict(frame, conf=0.2, verbose=False, device=0)
+        results = model.predict(frame, conf=0.2, verbose=False, device='cpu')
         
         # Plot the predictions onto the frame
         annotated_frame = results[0].plot()
