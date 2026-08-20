@@ -3,7 +3,7 @@ import time
 from ultralytics import YOLO
 
 def main():
-    print("--- AEGIS Phase 5: Live Webcam Inference ---")
+    print("--- AEGIS Phase 6: Live Webcam & ArUco Inference ---")
     
     # Path to your successfully trained baseline model
     model_path = r'D:\AntiGravity Projects\mnemosyne\runs\detect\runs\train\aegis_baseline_fast\weights\best.pt'
@@ -14,6 +14,12 @@ def main():
     except Exception as e:
         print(f"Error loading model: {e}")
         return
+
+    # Initialize ArUco Detector
+    print("Initializing ArUco Detector (DICT_6X6_250)...")
+    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
+    aruco_params = cv2.aruco.DetectorParameters()
+    aruco_detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
 
     # Open the webcam. 0 is the default camera, 1 is usually an external USB webcam (like ROG Eye S)
     # Try changing this to 1 if it opens your laptop's built-in webcam instead.
@@ -39,13 +45,22 @@ def main():
             print("Failed to grab frame. Exiting...")
             break
             
-        # Run inference on the frame
+        # 1. Run inference on the frame for Safety/PPE
         # Lowered conf to 0.2 to see if the model is detecting you but with lower confidence
         # due to differences between your webcam background/lighting and the dataset
         results = model.predict(frame, conf=0.2, verbose=False, device=0)
         
         # Plot the predictions onto the frame
         annotated_frame = results[0].plot()
+        
+        # 2. Run ArUco detection on the original frame
+        corners, ids, rejected = aruco_detector.detectMarkers(frame)
+        
+        # If markers are found, draw them on the annotated frame
+        if ids is not None:
+            cv2.aruco.drawDetectedMarkers(annotated_frame, corners, ids)
+            # Optional: Print the IDs to console just to confirm it's tracking
+            # print(f"Detected ArUco IDs: {ids.flatten()}")
         
         # Calculate FPS
         new_time = time.time()
