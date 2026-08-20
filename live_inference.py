@@ -2,14 +2,20 @@ import cv2
 import time
 import sys
 import os
+import psutil
 from ultralytics import YOLO
 
 # Add the project root to sys.path so we can import from src
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from src.aegis_ppe.safety_interpreter import SafetyInterpreter
+from aegis_ppe.safety_interpreter import SafetyInterpreter
 
 def main():
-    print("--- AEGIS Phase 7: Safety Interpretation ---")
+    print("--- AEGIS Phase 8: Performance Measurement ---")
+    
+    # Setup psutil process for RAM usage
+    process = psutil.Process(os.getpid())
+    # Prime the CPU percentage calculation
+    psutil.cpu_percent()
     
     # Path to your successfully trained baseline model
     model_path = r'D:\AntiGravity Projects\mnemosyne\runs\detect\runs\train\aegis_baseline_fast\weights\best.pt'
@@ -48,8 +54,12 @@ def main():
     new_time = 0
 
     while True:
+        loop_start_time = time.time()
+        
         # Read a frame from the webcam
+        cam_start_time = time.time()
         success, frame = cap.read()
+        cam_latency_ms = (time.time() - cam_start_time) * 1000
         
         if not success:
             print("Failed to grab frame. Exiting...")
@@ -58,6 +68,7 @@ def main():
         # 1. Run inference on the frame for Safety/PPE
         # Lowered conf to 0.2 to see if the model is detecting you but with lower confidence
         # due to differences between your webcam background/lighting and the dataset
+        inf_start_time = time.time()
         results = model.predict(frame, conf=0.2, verbose=False, device=0)
         
         # Plot the predictions onto the frame
@@ -90,6 +101,7 @@ def main():
         
         # 2. Run ArUco detection on the original frame
         corners, ids, rejected = aruco_detector.detectMarkers(frame)
+        inf_latency_ms = (time.time() - inf_start_time) * 1000
         
         # If markers are found, draw them on the annotated frame
         if ids is not None:
@@ -97,21 +109,21 @@ def main():
             # Optional: Print the IDs to console just to confirm it's tracking
             # print(f"Detected ArUco IDs: {ids.flatten()}")
         
-        # Calculate FPS
-        new_time = time.time()
-        fps = 1 / (new_time - prev_time) if prev_time != 0 else 0
-        prev_time = new_time
+        # Calculate Telemetry
+        cpu_usage = psutil.cpu_percent()
+        ram_usage_mb = process.memory_info().rss / (1024 * 1024)
         
-        # Draw FPS on the frame
-        cv2.putText(
-            annotated_frame, 
-            f"FPS: {int(fps)}", 
-            (10, 40), 
-            cv2.FONT_HERSHEY_SIMPLEX, 
-            1, 
-            (0, 255, 0), # Green text
-            2
-        )
+        e2e_latency_ms = (time.time() - loop_start_time) * 1000
+        fps = 1000.0 / e2e_latency_ms if e2e_latency_ms > 0 else 0
+        
+        # Draw Telemetry Panel on the frame
+        # We will draw this in the bottom left corner to keep it out of the way of the warnings
+        y_offset = annotated_frame.shape[0] - 120
+        cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        cv2.putText(annotated_frame, f"E2E Latency: {e2e_latency_ms:.1f}ms", (10, y_offset + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        cv2.putText(annotated_frame, f"Inf Latency: {inf_latency_ms:.1f}ms", (10, y_offset + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        cv2.putText(annotated_frame, f"Cam Latency: {cam_latency_ms:.1f}ms", (10, y_offset + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        cv2.putText(annotated_frame, f"CPU: {cpu_usage:.1f}% | RAM: {ram_usage_mb:.0f}MB", (10, y_offset + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         
         # Display the resulting frame
         cv2.imshow("AEGIS Live Inference - ROG Eye S", annotated_frame)

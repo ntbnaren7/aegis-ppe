@@ -16,6 +16,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "opencv-python" },
+    { name = "psutil" },
     { name = "torch" },
     { name = "torchaudio" },
     { name = "torchvision" },
@@ -25,6 +26,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "opencv-python", specifier = ">=5.0.0.93" },
+    { name = "psutil", specifier = ">=7.2.2" },
     { name = "torch", index = "https://download.pytorch.org/whl/cu124" },
     { name = "torchaudio", index = "https://download.pytorch.org/whl/cu124" },
     { name = "torchvision", index = "https://download.pytorch.org/whl/cu124" },
