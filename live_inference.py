@@ -1,9 +1,15 @@
 import cv2
 import time
+import sys
+import os
 from ultralytics import YOLO
 
+# Add the project root to sys.path so we can import from src
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from src.aegis_ppe.safety_interpreter import SafetyInterpreter
+
 def main():
-    print("--- AEGIS Phase 6: Live Webcam & ArUco Inference ---")
+    print("--- AEGIS Phase 7: Safety Interpretation ---")
     
     # Path to your successfully trained baseline model
     model_path = r'D:\AntiGravity Projects\mnemosyne\runs\detect\runs\train\aegis_baseline_fast\weights\best.pt'
@@ -20,6 +26,10 @@ def main():
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
     aruco_params = cv2.aruco.DetectorParameters()
     aruco_detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
+
+    # Initialize Safety Interpreter
+    print("Initializing Safety Interpreter (Temporal Threshold: 5 frames)...")
+    interpreter = SafetyInterpreter(temporal_threshold=5)
 
     # Open the webcam. 0 is the default camera, 1 is usually an external USB webcam (like ROG Eye S)
     # Try changing this to 1 if it opens your laptop's built-in webcam instead.
@@ -52,6 +62,31 @@ def main():
         
         # Plot the predictions onto the frame
         annotated_frame = results[0].plot()
+        
+        # Extract detected class IDs from YOLO results
+        # results[0].boxes.cls is a tensor of shape (N,) containing class IDs
+        detected_class_ids = [int(cls.item()) for cls in results[0].boxes.cls] if len(results[0].boxes) > 0 else []
+        
+        # Process the detected classes through the Safety Interpreter
+        active_violations = interpreter.process_frame(detected_class_ids)
+        
+        # Draw massive warning text if violations are active
+        if active_violations:
+            warning_text = f"VIOLATION: {', '.join(active_violations)}"
+            cv2.putText(
+                annotated_frame, 
+                warning_text, 
+                (10, 80), 
+                cv2.FONT_HERSHEY_SIMPLEX, 
+                1, 
+                (0, 0, 255), # Red text
+                3
+            )
+            
+            # Optional: Add a subtle red overlay to the entire frame
+            overlay = annotated_frame.copy()
+            cv2.rectangle(overlay, (0, 0), (annotated_frame.shape[1], annotated_frame.shape[0]), (0, 0, 255), -1)
+            cv2.addWeighted(overlay, 0.2, annotated_frame, 0.8, 0, annotated_frame)
         
         # 2. Run ArUco detection on the original frame
         corners, ids, rejected = aruco_detector.detectMarkers(frame)
