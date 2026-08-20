@@ -36,5 +36,9 @@ test/
 *~
 .DS_Store
 
-# UV
-uv.lock
+# UV (Keep uv.lock in version control for reproducible builds!)
+.env
+.env.*
+
+# YOLO Cache files
+*.cache
