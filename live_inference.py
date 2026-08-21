@@ -10,15 +10,15 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from aegis_ppe.safety_interpreter import SafetyInterpreter
 
 def main():
-    print("--- AEGIS Phase 9: ONNX Runtime Inference ---")
+    print("--- AEGIS Phase 9.5: INT8 Runtime Inference ---")
     
     # Setup psutil process for RAM usage
     process = psutil.Process(os.getpid())
     # Prime the CPU percentage calculation
     psutil.cpu_percent()
     
-    # Path to your successfully exported ONNX model
-    model_path = r'D:\AntiGravity Projects\mnemosyne\runs\detect\runs\train\aegis_baseline_fast\weights\best.onnx'
+    # INT8 dynamic quantized model — validated mAP50: 0.7688 (-1.4% vs FP32 baseline)
+    model_path = r'D:\AntiGravity Projects\mnemosyne\runs\detect\runs\train\aegis_baseline_fast\weights\best_int8.onnx'
     
     try:
         print(f"Loading AEGIS Baseline Model from: {model_path}")

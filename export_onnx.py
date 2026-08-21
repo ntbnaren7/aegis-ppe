@@ -32,12 +32,12 @@ def main():
     print("Exporting to ONNX (FP32, no quantization)...")
     print("NOTE: No half/int8 flags — clean baseline export only.")
 
-    # imgsz=640 matches our training resolution
-    # opset=12 is the most widely compatible version for ONNX Runtime
+    # opset=13 enables per_channel=True in quantize_int8.py (axis attr added in opset 13)
+    # opset=13 is supported by all modern ONNX Runtime versions including 1.29.0
     export_path = model.export(
         format='onnx',
         imgsz=640,
-        opset=12,
+        opset=13,
         simplify=True,  # Graph simplification for better runtime compatibility
     )
 
