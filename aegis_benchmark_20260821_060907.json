@@ -1,0 +1,104 @@
+{
+  "timestamp": "20260821_060907",
+  "platform": {
+    "python": "3.13.14 (main, Jul 14 2026, 02:14:27) [GCC 14.2.0]",
+    "ort_version": "1.29.0",
+    "available_providers": [
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "cpu_count": 4,
+    "total_ram_mb": 3667
+  },
+  "config": {
+    "camera_index": 0,
+    "resolutions_tested": [
+      640,
+      512,
+      416,
+      320
+    ],
+    "conf_threshold": 0.2,
+    "warmup_frames": 30,
+    "benchmark_secs": 30
+  },
+  "models": {
+    "int8_640": {
+      "label": "int8_640",
+      "model_path": "/app/python/best_int8.onnx",
+      "model_size_mb": 2.88,
+      "ort_version": "1.29.0",
+      "execution_provider": "CPUExecutionProvider",
+      "model_load_time_ms": 685.2,
+      "warmup_latency_ms": 586.6,
+      "sustained_fps": 1.52,
+      "inf_latency_mean_ms": 630.1,
+      "inf_latency_p95_ms": 768.6,
+      "e2e_latency_mean_ms": 654.8,
+      "cpu_mean_pct": 99.9,
+      "ram_mean_mb": 194.5,
+      "thermal_mean_c": 50.2,
+      "detections_per_frame": 0.0,
+      "zero_detection_frames": 46,
+      "runtime_errors": []
+    },
+    "int8_512": {
+      "label": "int8_512",
+      "model_path": "/app/python/best_int8_512.onnx",
+      "model_size_mb": 2.82,
+      "ort_version": "1.29.0",
+      "execution_provider": "CPUExecutionProvider",
+      "model_load_time_ms": 669.6,
+      "warmup_latency_ms": 449.9,
+      "sustained_fps": 1.99,
+      "inf_latency_mean_ms": 485.0,
+      "inf_latency_p95_ms": 651.7,
+      "e2e_latency_mean_ms": 499.8,
+      "cpu_mean_pct": 100.0,
+      "ram_mean_mb": 173.1,
+      "thermal_mean_c": 50.8,
+      "detections_per_frame": 0.0,
+      "zero_detection_frames": 60,
+      "runtime_errors": []
+    },
+    "int8_416": {
+      "label": "int8_416",
+      "model_path": "/app/python/best_int8_416.onnx",
+      "model_size_mb": 2.78,
+      "ort_version": "1.29.0",
+      "execution_provider": "CPUExecutionProvider",
+      "model_load_time_ms": 671.8,
+      "warmup_latency_ms": 290.4,
+      "sustained_fps": 3.13,
+      "inf_latency_mean_ms": 304.5,
+      "inf_latency_p95_ms": 466.6,
+      "e2e_latency_mean_ms": 317.7,
+      "cpu_mean_pct": 99.9,
+      "ram_mean_mb": 155.7,
+      "thermal_mean_c": 51.6,
+      "detections_per_frame": 0.0,
+      "zero_detection_frames": 94,
+      "runtime_errors": []
+    },
+    "int8_320": {
+      "label": "int8_320",
+      "model_path": "/app/python/best_int8_320.onnx",
+      "model_size_mb": 2.76,
+      "ort_version": "1.29.0",
+      "execution_provider": "CPUExecutionProvider",
+      "model_load_time_ms": 685.1,
+      "warmup_latency_ms": 342.6,
+      "sustained_fps": 4.89,
+      "inf_latency_mean_ms": 190.9,
+      "inf_latency_p95_ms": 264.8,
+      "e2e_latency_mean_ms": 202.5,
+      "cpu_mean_pct": 100.0,
+      "ram_mean_mb": 136.5,
+      "thermal_mean_c": 51.6,
+      "detections_per_frame": 0.0,
+      "zero_detection_frames": 147,
+      "runtime_errors": []
+    }
+  },
+  "decision": "320x320 is faster but still misses 8 FPS target. Test even smaller resolution or consider QNN/HTP."
+}
