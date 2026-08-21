@@ -1,0 +1,61 @@
+{
+  "timestamp": "20260821_055418",
+  "platform": {
+    "python": "3.13.14 (main, Jul 14 2026, 02:14:27) [GCC 14.2.0]",
+    "ort_version": "1.29.0",
+    "available_providers": [
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "cpu_count": 4,
+    "total_ram_mb": 3667
+  },
+  "config": {
+    "camera_index": 2,
+    "input_size": 640,
+    "conf_threshold": 0.2,
+    "warmup_frames": 30,
+    "benchmark_secs": 30
+  },
+  "models": {
+    "fp32": {
+      "label": "fp32",
+      "model_path": "/app/python/best.onnx",
+      "model_size_mb": 10.12,
+      "ort_version": "1.29.0",
+      "execution_provider": "CPUExecutionProvider",
+      "model_load_time_ms": 232.4,
+      "warmup_latency_ms": 623.1,
+      "sustained_fps": 1.48,
+      "inf_latency_mean_ms": 656.5,
+      "inf_latency_p95_ms": 820.8,
+      "e2e_latency_mean_ms": 674.4,
+      "cpu_mean_pct": 99.9,
+      "ram_mean_mb": 201.3,
+      "thermal_mean_c": 50.0,
+      "detections_per_frame": 0.13,
+      "zero_detection_frames": 43,
+      "runtime_errors": []
+    },
+    "int8": {
+      "label": "int8",
+      "model_path": "/app/python/best_int8.onnx",
+      "model_size_mb": 2.88,
+      "ort_version": "1.29.0",
+      "execution_provider": "CPUExecutionProvider",
+      "model_load_time_ms": 594.2,
+      "warmup_latency_ms": 604.4,
+      "sustained_fps": 1.58,
+      "inf_latency_mean_ms": 610.5,
+      "inf_latency_p95_ms": 749.4,
+      "e2e_latency_mean_ms": 628.0,
+      "cpu_mean_pct": 99.9,
+      "ram_mean_mb": 210.9,
+      "thermal_mean_c": 51.2,
+      "detections_per_frame": 1.06,
+      "zero_detection_frames": 37,
+      "runtime_errors": []
+    }
+  },
+  "decision": "BOTH TOO SLOW \u2014 investigate resolution reduction, frame-skipping, or alternative runtimes (NNAPI/HTP delegate, QNN SDK)"
+}

@@ -192,7 +192,10 @@ def benchmark_model(label: str, model_path: Path, cap: cv2.VideoCapture) -> dict
         if i == 0:
             warmup_latency_ms = elapsed
     result['warmup_latency_ms'] = round(warmup_latency_ms, 1) if warmup_latency_ms else None
-    print(f"  Warm-up first frame: {warmup_latency_ms:.1f} ms")
+    if warmup_latency_ms is not None:
+        print(f"  Warm-up first frame: {warmup_latency_ms:.1f} ms")
+    else:
+        print(f"  Warm-up failed: no frames read")
 
     # ── Sustained benchmark ──────────────────────────────────────────────────
     print(f"  Running {BENCHMARK_SECS}s sustained benchmark...")
@@ -315,11 +318,27 @@ def main():
     print(f"  Output: {output_path}")
     print("=" * 60)
 
-    # Open camera once — shared between both runs for identical conditions
-    print(f"\nOpening camera (index {args.camera})...")
-    cap = cv2.VideoCapture(args.camera)
-    if not cap.isOpened():
-        print("ERROR: Could not open camera. Exiting.")
+    # Open camera: scan indices 0-5 if the default doesn't work
+    print(f"\nOpening camera (forcing V4L2 backend)...")
+    cap = None
+    for idx in range(6):
+        # Force V4L2 backend to bypass buggy GStreamer pipelines on Linux SBCs
+        cap_test = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+        if cap_test.isOpened():
+            ret, _ = cap_test.read()
+            if ret:
+                cap = cap_test
+                print(f"  Successfully opened camera at index {idx}")
+                args.camera = idx
+                break
+            else:
+                cap_test.release()
+        else:
+            cap_test.release()
+
+    if cap is None or not cap.isOpened():
+        print("ERROR: Could not open any camera on indices 0-5. Exiting.")
+        print("Make sure the USB camera is plugged in BEFORE clicking Deploy!")
         return
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, INPUT_SIZE)
@@ -370,13 +389,20 @@ def main():
         print(f"  DECISION: {decision}")
         print(f"{'='*60}")
 
-    # Save results
+    # Save results to file
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
 
-    print(f"\nResults written to: {output_path}")
-    print("Copy this file off the UNO Q and commit it as benchmark evidence.")
+    # Print results to console so user can copy-paste from Arduino App Lab
+    print(f"\n{'='*60}")
+    print("  APP LAB COPY-PASTE ZONE START")
+    print(f"{'='*60}")
+    print(json.dumps(results, indent=2))
+    print(f"{'='*60}")
+    print("  APP LAB COPY-PASTE ZONE END")
+    print(f"{'='*60}\n")
 
+    print(f"Results also written to file: {output_path}")
 
 if __name__ == '__main__':
     main()
