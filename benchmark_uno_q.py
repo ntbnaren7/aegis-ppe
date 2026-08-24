@@ -53,11 +53,82 @@ def preprocess(frame: np.ndarray, size: int) -> np.ndarray:
     return np.expand_dims(img, axis=0)
 
 
-def postprocess_count(output: np.ndarray, conf: float) -> int:
-    """Count detections above the confidence threshold."""
-    pred = output[0]
-    scores = pred[4:, :].max(axis=0)
-    return int((scores >= conf).sum())
+def nms_numpy(boxes, scores, iou_threshold):
+    if len(boxes) == 0:
+        return []
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+    areas = (x2 - x1) * (y2 - y1)
+    order = scores.argsort()[::-1]
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+        w = np.maximum(0.0, xx2 - xx1)
+        h = np.maximum(0.0, yy2 - yy1)
+        inter = w * h
+        iou = inter / (areas[i] + areas[order[1:]] - inter + 1e-6)
+        inds = np.where(iou <= iou_threshold)[0]
+        order = order[inds + 1]
+    return keep
+
+def postprocess_count(output: np.ndarray, conf_thres: float) -> dict:
+    """
+    Decodes YOLO11 ONNX (1, 18, 8400) to boxes using NMS and returns detailed metrics.
+    Ensures exactly 14 class scores are interpreted.
+    """
+    pred = output[0].T # (8400, 18)
+    boxes = pred[:, :4] # cx, cy, w, h
+    scores = pred[:, 4:18] # Exactly 14 class scores
+    
+    max_scores = scores.max(axis=1)
+    class_ids = scores.argmax(axis=1)
+    
+    mask = max_scores >= conf_thres
+    pre_nms_count = int(np.sum(mask))
+    
+    if pre_nms_count == 0:
+        return {
+            'raw_predictions_above_threshold': 0,
+            'final_detections': 0,
+            'classes': [],
+            'confidences': []
+        }
+        
+    valid_boxes = boxes[mask]
+    valid_scores = max_scores[mask]
+    valid_class_ids = class_ids[mask]
+    
+    # cx,cy,w,h to x1, y1, x2, y2 for Numpy NMS
+    x1 = valid_boxes[:, 0] - valid_boxes[:, 2] / 2
+    y1 = valid_boxes[:, 1] - valid_boxes[:, 3] / 2
+    x2 = valid_boxes[:, 0] + valid_boxes[:, 2] / 2
+    y2 = valid_boxes[:, 1] + valid_boxes[:, 3] / 2
+    
+    xyxy = np.stack([x1, y1, x2, y2], axis=1)
+    
+    indices = nms_numpy(xyxy, valid_scores, 0.45)
+    
+    final_detections = len(indices)
+    if final_detections > 0:
+        final_classes = [int(valid_class_ids[i]) for i in indices]
+        final_confs = [float(valid_scores[i]) for i in indices]
+    else:
+        final_classes = []
+        final_confs = []
+        
+    return {
+        'raw_predictions_above_threshold': pre_nms_count,
+        'final_detections': final_detections,
+        'classes': final_classes,
+        'confidences': final_confs
+    }
 
 
 def load_model(model_path: Path):
@@ -134,7 +205,7 @@ def benchmark_model(label: str, model_path: Path, cap: cv2.VideoCapture, input_s
     # Sustained benchmark
     print(f"  Running {BENCHMARK_SECS}s sustained benchmark...")
     
-    inf_latencies, e2e_latencies = [], []
+    inf_latencies, post_latencies, e2e_latencies = [], [], []
     cpus, rams, thermals, det_counts = [], [], [], []
     frames_done = 0
     t_bench_start = time.perf_counter()
@@ -149,10 +220,15 @@ def benchmark_model(label: str, model_path: Path, cap: cv2.VideoCapture, input_s
         try:
             outputs = session.run(None, {input_name: img})
             inf_ms = (time.perf_counter() - t_inf_start) * 1000
-            e2e_ms = (time.perf_counter() - t_e2e_start) * 1000
+            
+            t_post_start = time.perf_counter()
             det_count = postprocess_count(outputs[0], CONF_THRESH)
+            post_ms = (time.perf_counter() - t_post_start) * 1000
+            
+            e2e_ms = (time.perf_counter() - t_e2e_start) * 1000
             
             inf_latencies.append(inf_ms)
+            post_latencies.append(post_ms)
             e2e_latencies.append(e2e_ms)
             cpus.append(psutil.cpu_percent())
             rams.append(process.memory_info().rss / (1024 * 1024))
@@ -173,18 +249,50 @@ def benchmark_model(label: str, model_path: Path, cap: cv2.VideoCapture, input_s
         result['sustained_fps']          = round(frames_done / total_time, 2)
         result['inf_latency_mean_ms']    = round(float(np.mean(inf_latencies)), 1)
         result['inf_latency_p95_ms']     = round(float(np.percentile(inf_latencies, 95)), 1)
+        result['post_latency_mean_ms']   = round(float(np.mean(post_latencies)), 1)
         result['e2e_latency_mean_ms']    = round(float(np.mean(e2e_latencies)), 1)
         result['cpu_mean_pct']           = round(float(np.mean(cpus)), 1)
         result['ram_mean_mb']            = round(float(np.mean(rams)), 1)
         result['thermal_mean_c']         = round(float(np.mean(thermals)), 1) if thermals else None
-        result['detections_per_frame']   = round(float(np.mean(det_counts)), 2)
-        result['zero_detection_frames']  = int(sum(1 for d in det_counts if d == 0))
+        
+        # Aggregate det_counts list of dicts
+        avg_raw = np.mean([d['raw_predictions_above_threshold'] for d in det_counts])
+        avg_final = np.mean([d['final_detections'] for d in det_counts])
+        zero_frames = sum(1 for d in det_counts if d['final_detections'] == 0)
+        
+        all_classes = []
+        all_confs = []
+        for d in det_counts:
+            all_classes.extend(d['classes'])
+            all_confs.extend(d['confidences'])
+            
+        class_distribution = {c: all_classes.count(c) for c in set(all_classes)}
+        mean_conf = float(np.mean(all_confs)) if all_confs else 0.0
+
+        result['raw_predictions_above_threshold'] = round(avg_raw, 2)
+        result['final_detections_post_nms'] = round(avg_final, 2)
+        result['zero_final_detection_frames'] = int(zero_frames)
+        result['class_distribution'] = class_distribution
+        result['mean_final_confidence'] = round(mean_conf, 4)
+
+        # Save a debug frame so the user can see what the camera was pointing at
+        try:
+            debug_img = frame.copy()
+            if det_counts and det_counts[-1]['final_detections'] > 0:
+                last_det = det_counts[-1]
+                for cls_id, conf in zip(last_det['classes'], last_det['confidences']):
+                    # Since we don't have the exact boxes stored in det_counts, we just add a text label indicating detections
+                    cv2.putText(debug_img, f"Class {cls_id}: {conf:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.imwrite(os.path.join(DIR_NAME, f"debug_scene_{label}.jpg"), debug_img)
+        except Exception as e:
+            print(f"    Warning: Could not save debug image: {e}")
 
     print(f"\n  Results for {label}:")
     print(f"    Sustained FPS:         {result.get('sustained_fps')}")
     print(f"    Inf latency (mean):    {result.get('inf_latency_mean_ms')} ms")
+    print(f"    Post latency (mean):   {result.get('post_latency_mean_ms')} ms")
     print(f"    CPU utilization:       {result.get('cpu_mean_pct')} %")
-    print(f"    Detections/frame:      {result.get('detections_per_frame')}")
+    print(f"    Final Detections/frame:{result.get('final_detections_post_nms')}")
     
     return result
 
@@ -206,12 +314,14 @@ def main():
     # Open camera (scan 0-5, forcing V4L2)
     print("\nOpening camera (forcing V4L2 backend)...")
     cap = None
+    actual_camera_idx = None
     for idx in range(6):
         cap_test = cv2.VideoCapture(idx, cv2.CAP_V4L2)
         if cap_test.isOpened():
             ret, _ = cap_test.read()
             if ret:
                 cap = cap_test
+                actual_camera_idx = idx
                 print(f"  Successfully opened camera at index {idx}")
                 break
             cap_test.release()
@@ -235,7 +345,8 @@ def main():
         'timestamp': timestamp,
         'platform': platform_info,
         'config': {
-            'camera_index': args.camera,
+            'requested_camera_index': args.camera,
+            'actual_camera_index': actual_camera_idx,
             'resolutions_tested': RESOLUTIONS,
             'conf_threshold': CONF_THRESH,
             'warmup_frames': WARMUP_FRAMES,
